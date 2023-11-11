@@ -11,7 +11,8 @@ path = 'escrime-4-3.avi'
 initial_area = (int(640/2), int(480/2))
 
 
-def make_box(point, box_size=25):
+
+def make_box(point, box_size=20):
     #Make the bounding box
     x1 = point[0] - box_size
     x2 = point[0] + box_size
@@ -34,32 +35,19 @@ c1, c2 = make_box(initial_area)
 
 cap = cv2.VideoCapture(path)
 
-init_image = cap.read()[1]
-initial = just_box(init_image, make_box(initial_area))
-final = None
+
+frames = []
+
+#Read the video frames and store them into frames list, dont show the video
 
 while True:
-
     ret, frame = cap.read()
     if ret == False:
         break
-    
-    #Draw the bounding tracking box
-    #cv2.rectangle(frame, c1,c2, (0,0,255), 2)
-    
-    #Draw the current frame
-    #cv2.imshow('frame', frame)
-
-    
-    #27
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-cap.release()
+    frames.append(frame)
 
 
 
-#Define a function c that returns a dict r g b with the histogran of N bins for each channel of an image
 
 
 def color_hist(image, N=20):
@@ -68,22 +56,6 @@ def color_hist(image, N=20):
     b = np.histogram(image[:,:,2], bins=N)[0]
     return {'r':r, 'g':g, 'b':b}
 
-
-# plt.figure(figsize=(15, 5))
-# plt.subplot(1, 2, 1),
-# plt.bar(range(len(color_hist(initial)['r'])), color_hist(initial)['r'],color='red')
-# plt.bar(range(len(color_hist(initial)['g'])), color_hist(initial)['g'],color='green')
-# plt.bar(range(len(color_hist(initial)['b'])), color_hist(initial)['b'],color='blue')
-# plt.xlabel('Bins')
-# plt.ylabel('Number of pixels')
-# plt.subplot(1, 2, 2),plt.imshow(initial)
-# plt.show()
-
-
-
-
-
-#Generate random particles
 
 def initialize_particles(N, initial_position,variance):
     particles = []
@@ -94,32 +66,26 @@ def initialize_particles(N, initial_position,variance):
     return particles
 
 
-particles = initialize_particles(100, initial_area, 10)
 
-#Plot the particles on top of initial image
-
-# plt.figure(figsize=(10,10))
-# plt.imshow(init_image)
-# plt.scatter([p[0] for p in particles], [p[1] for p in particles], color='green', s=2)
-# plt.show()
-
-
-
-def get_histograms(particles):
+def get_histograms(particles,frame):
     boxes =  [make_box(p) for p in particles]
-    histograms = [color_hist(just_box(init_image, b)) for b in boxes]
+    histograms = [color_hist(just_box(frame, b)) for b in boxes]
 
     return histograms
 
 
+#def histogram_distance(h1,h2):
+#    return cv2.compareHist(h1['r'], h2['r'], cv2.HISTCMP_BHATTACHARYYA)
+    
 def histogram_distance(h1,h2):
     r1, g1, b1 = np.array(h1['r']), np.array(h1['g']), np.array(h1['b'])
     r2, g2, b2 = np.array(h2['r']), np.array(h2['g']), np.array(h2['b'])
 
-    norm_term_r = 1/np.sqrt(np.mean(r1)*np.mean(r2)*len(r1)**2)
-    norm_term_g = 1/np.sqrt(np.mean(g1)*np.mean(g2)*len(g1)**2)
-    norm_term_b = 1/np.sqrt(np.mean(b1)*np.mean(b2)*len(b1)**2)
+    epsilon = 1e-10  # Small constant to avoid division by zero
 
+    norm_term_r = 1/np.sqrt(np.mean(r1)*np.mean(r2)*len(r1)**2 + epsilon)
+    norm_term_g = 1/np.sqrt(np.mean(g1)*np.mean(g2)*len(g1)**2 + epsilon)
+    norm_term_b = 1/np.sqrt(np.mean(b1)*np.mean(b2)*len(b1)**2 + epsilon)
 
     r = np.sqrt(1-norm_term_r*np.sum(np.sqrt(r1*r2)))
     g = np.sqrt(1-norm_term_g*np.sum(np.sqrt(g1*g2)))
@@ -127,15 +93,41 @@ def histogram_distance(h1,h2):
 
     return r+g+b
 
+def get_best_particle(particles):
+    return particles[np.argmax(norm_weights)]
 
-initial_hist = color_hist(initial)
 
-distances = []
-for hist in get_histograms(particles):
-    distances.append(histogram_distance(hist, initial_hist))
 
-foo = [particles[i][2] * (1/distances[i]) for i in range(len(particles))]
 
-foo = foo/sum(foo)
 
-print(foo)
+asd = [(frames[0], initial_area)]
+boxes = []
+for i in range(1,len(frames)):
+    prior_box = just_box(frames[-1], make_box(asd[-1][1]))
+    prior_hist = color_hist(prior_box)
+
+    particles = initialize_particles(100, asd[-1][1], 2)
+    distances = []
+
+    for hist in get_histograms(particles, frames[i]):
+        distances.append(histogram_distance(hist, prior_hist)+1e-9)
+
+    foo = [particles[i][2] * (1/distances[i]) for i in range(len(particles))]
+   
+    norm_weights = foo/sum(foo)
+    particles_coords = [p[:2] for p in particles]
+    asd.append((frames[i], get_best_particle(particles_coords)))
+  
+
+ 
+
+
+
+while True:
+    for frame, box in asd:
+        box = make_box(box)
+        cv2.rectangle(frame, box[0], box[1], (0,0,255), 2)
+        cv2.imshow('frame', frame)
+        if cv2.waitKey(20) & 0xFF == ord('q'):
+            break
+    break

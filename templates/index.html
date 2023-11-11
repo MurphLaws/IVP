@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Player</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        #drop-zone {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+        }
+        video {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="drop-zone" ondrop="handleDrop(event)" ondragover="handleDragOver(event)">
+    <p>Drag and drop a video file here</p>
+</div>
+
+<video id="video-player" width="640" height="480" controls>
+    <source id="video-source" type="video/mp4">
+    Your browser does not support the video tag.
+</video>
+
+<script>
+    function handleDrop(event) {
+        event.preventDefault();
+        const file = event.dataTransfer.files[0];
+        playVideo(file);
+    }
+
+    function handleDragOver(event) {
+        event.preventDefault();
+    }
+
+    function playVideo(file) {
+        const videoPlayer = document.getElementById('video-player');
+        const videoSource = document.getElementById('video-source');
+
+        const videoURL = URL.createObjectURL(file);
+        videoSource.src = videoURL;
+
+        videoPlayer.load();
+        videoPlayer.play();
+    }
+</script>
+
+</body>
+</html>
