@@ -59,8 +59,8 @@ class ParticleFilter:
 
 
     @staticmethod
-    def color_hist(image):
-        return cv2.calcHist([image], [0, 1, 2], None, [20, 20, 20], [0, 256, 0, 256, 0, 256])
+    def color_hist(image, Nb=50):
+        return cv2.calcHist([image], [0, 1, 2], None, [Nb, Nb, Nb], [0, 256, 0, 256, 0, 256])
 
 
     def plot_color_hist(self,image):
@@ -116,7 +116,7 @@ class ParticleFilter:
 
     @staticmethod
     def get_best_particle(particles, distances):
-        new_weights = [1 / (d + 1e-10) for d in distances]
+        new_weights = [1/(d + 1e-10) for d in distances]
 
         updated_particles = [(p[0], p[1], p[2] * new_weights[i]) for i, p in enumerate(particles)]
 
@@ -132,7 +132,7 @@ class ParticleFilter:
                 prior_box = self.just_box(asd[-1][0],self.make_box(asd[-1][1]))#just_box(frames[-1], make_box(asd[-1][1]))
                 prior_hist = self.color_hist(prior_box)
 
-                particles = self.initialize_particles(100, asd[-1][1], 5)
+                particles = self.initialize_particles(100, asd[-1][1], 3)
 
                 distances = self.histogram_distance(prior_hist, self.get_histograms(particles, frames[i]))
                 particles = self.systematic_resampling(particles)
