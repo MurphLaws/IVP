@@ -173,8 +173,11 @@ class ParticleFilter:
                 j += 1
             resampled_particles.append(particles[j])
         
-        return sorted(resampled_particles, key=lambda x: x[2], reverse=True)
-
+        sorted_particles = sorted(resampled_particles, key=lambda x: x[2], reverse=True)
+        #Return sorted_oarticles normalized
+        sum_weights = sum([p[2] for p in sorted_particles])
+        sorted_particles = [(p[0], p[1], p[2]/sum_weights) for p in sorted_particles]
+        return sorted_particles
 
     @staticmethod
     def residual_resampling(particles):
@@ -211,7 +214,7 @@ class ParticleFilter:
 
     def run_particle_filter(self, box_size=25):
             frames = list(self.get_frames())
-            particles = self.initialize_particles(100, self.initial_area, 5)
+            particles = self.initialize_particles(500, self.initial_area, 5)
             asd = [(frames[0], self.initial_area, particles)]
             first_hist = self.color_hist(self.just_box(frames[0], self.make_box(self.initial_area, box_size=box_size)))
             
@@ -224,8 +227,14 @@ class ParticleFilter:
 
                 particles = self.systematic_resampling(particles)
             
-    
-                best_particle = particles[0]
+
+                x_mean = np.sum([p[0]*p[2] for p in particles])
+                y_mean = np.sum([p[1]*p[2] for p in particles])
+
+                best_particle = (int(x_mean), int(y_mean))
+
+               
+
                 asd.append((frames[i], (best_particle[0], best_particle[1]),particles))
 
             return asd
@@ -242,7 +251,7 @@ def main(path,save_gif=False, box_size=10):
 
     particleFilter = ParticleFilter(path, (320, 240))
     new_frames = []
-    for frame, box, particles in particleFilter.run_particle_filter(box_size=box_size)[0:300]:
+    for frame, box, particles in particleFilter.run_particle_filter(box_size=box_size):
         box = particleFilter.make_box(box, box_size=box_size)
         cv2.rectangle(frame, box[0], box[1], (0, 0, 255), 2)    
     
