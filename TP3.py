@@ -172,12 +172,11 @@ class ParticleFilter:
             while u[i] > cumsum_weights[j]:
                 j += 1
             resampled_particles.append(particles[j])
-        
-        sorted_particles = sorted(resampled_particles, key=lambda x: x[2], reverse=True)
+
         #Return sorted_oarticles normalized
-        sum_weights = sum([p[2] for p in sorted_particles])
-        sorted_particles = [(p[0], p[1], p[2]/sum_weights) for p in sorted_particles]
-        return sorted_particles
+        sum_weights = sum([p[2] for p in resampled_particles])
+        resampled_particles = [(p[0], p[1], p[2]/sum_weights) for p in resampled_particles]
+        return resampled_particles
 
     @staticmethod
     def residual_resampling(particles):
@@ -197,7 +196,9 @@ class ParticleFilter:
             if u < fractional_weight:
                 resampled_particles[i] = particles[i]
 
-        return sorted(resampled_particles, key=lambda x: x[2], reverse=True)
+        sum_weights = sum([p[2] for p in resampled_particles])
+        resampled_particles = [(p[0], p[1], p[2]/sum_weights) for p in resampled_particles]
+        return resampled_particles
 
 
     @staticmethod
@@ -207,7 +208,9 @@ class ParticleFilter:
 
         resampled_indices = np.random.choice(N, size=N, p=weights)
         resampled_particles = [particles[i] for i in resampled_indices]
-        return sorted(resampled_particles, key=lambda x: x[2], reverse=True)
+        sum_weights = sum([p[2] for p in resampled_particles])
+        resampled_particles = [(p[0], p[1], p[2]/sum_weights) for p in resampled_particles]
+        return resampled_particles
     
 
 
@@ -225,7 +228,7 @@ class ParticleFilter:
                 particles = self.update_particles(particles, distances)
 
 
-                particles = self.systematic_resampling(particles)
+                particles = self.multinomial_resampling(particles)
             
 
                 x_mean = np.sum([p[0]*p[2] for p in particles])
