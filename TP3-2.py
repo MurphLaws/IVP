@@ -372,6 +372,8 @@ def main(save_gif=False):
 
 
 first_frame = frames[0]
+
+
 boxo = Box((center_x-box_size, center_y-box_size), (center_x+box_size, center_y-box_size), (center_x+box_size, center_y+box_size), (center_x-box_size, center_y+box_size),1,20)
 #plt.figure(figsize=(10,4))
 #boxo.rotate_box()
