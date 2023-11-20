@@ -11,6 +11,9 @@ import argparse
 import numpy as np
 import copy
 import kornia
+import timeit
+import torch
+from kornia.utils import create_meshgrid
 
 class Box:
     def __init__(self, p1, p2,p3,p4,scale, angle):
@@ -78,7 +81,7 @@ class Box:
         self.p3 = (int(rotated_points[2][0]), int(rotated_points[2][1]))
         self.p4 = (int(rotated_points[3][0]), int(rotated_points[3][1]))
 
-
+    
 
     def applyRotation(self, angle):
         # Calculate the center of the quadrilateral
@@ -151,22 +154,14 @@ class Box:
     @staticmethod
     def rotate_image(img_array, particle):
 
+     
         angle = particle[3]
         pivot = particle[0], particle[1]
-
-    
-        # Calculate the translation to bring the pivot to the center
-        translate_x = img_array.shape[1] // 2 - int(pivot[0])
-        translate_y = img_array.shape[0] // 2 - int(pivot[1])
-
-        # Apply the translation
-        translated_image = np.roll(img_array, (translate_y, translate_x), axis=(0, 1))
-
-        # Apply the rotation using a geometric transformation
-        rotated_image = np.array(Image.fromarray(translated_image).rotate(angle, resample=Image.BICUBIC))
-
-        return rotated_image
-
+       
+       
+       
+        
+        return rotated_image, trans_time, rot_time
 
 class ParticleFilter:
 
@@ -221,12 +216,32 @@ class ParticleFilter:
         return cv2.calcHist([image], [0, 1, 2], None, [Nb, Nb, Nb], [0, 256, 0, 256, 0, 256])
 
 
-    def get_histograms(self, particles, frame):
-        boxes = [self.box.applyScaling(p[2]).applyRotation(p[3]) for p in particles]
-        portions = [b.getImagePortion(frame) for b in boxes]
-        histograms = [self.color_hist(p) for p in portions]
-        return histograms
 
+    #### THE WHOLE FUCKING PROBLEM IS HERE
+    def get_histograms(self, particles, frame):
+        
+        images = []
+
+        rot = []
+        trans = []
+     
+        for particle in particles:
+            rotation= self.box.rotate_image(frame, particle)
+            trans.append(rotation[1])
+            rot.append(rotation[2])
+            images.append(rotation[0])
+            #Make an image full of zeros of 100 by 100
+    
+        portions = [self.box.getImagePortion(image) for image in images]
+
+        histograms = [self.color_hist(p) for p in portions]
+
+
+        return histograms, sum(rot), sum(trans)
+    
+    #define a factorial funcion
+
+   
     
     def prediction_step(self, particles, variance):
         new_particles = []
@@ -288,33 +303,43 @@ class ParticleFilter:
 
 
     def run_particle_filter(self):
+                
+           
                 frames = list(self.get_frames())
-                particles = self.initialize_particles(2, 5)
+          
+
+                particles = self.initialize_particles(5, 5)
                 asd = []
                 sdf = []
                 best_particles = []
                 boxy = self.box
                 box_size = 25
-               
+
+                rot = []
+                trans = []
+          
                 initial_box = copy.copy(self.box)
                 first_hist = self.color_hist(initial_box.getImagePortion(frames[0]))
-
-              
-
+          
                 for i in tqdm(range(1, len(frames)-1)):
-
+                    
+                    #Im gonna time every method to see which one is causing the delay
                     particles = self.prediction_step(particles, 5)
                  
-                    distances = self.histogram_distance(first_hist, self.get_histograms(particles, frames[i]))
+                 
+                    histograms,rota,transa  = self.get_histograms(particles, frames[i])
 
-                    #New distances should be an array of the same size as disances, but radom nuibers hat add up to 1
-
-                    new_distances = np.random.dirichlet(np.ones(len(distances)), size=1)[0]
-           
-                    particles = self.update_particles(particles, new_distances)
-
+                    rot.append(rota)
+                    trans.append(transa)
+        
+                    distances = self.histogram_distance(first_hist, histograms)
+         
+                    particles = self.update_particles(particles, distances)
+                  
+                  
                     particles = self.systematic_resampling(particles)
-            
+                  
+                  
                     x_mean = np.sum([p[0]*p[4] for p in particles])
                     y_mean = np.sum([p[1]*p[4] for p in particles])
                     s_mean = np.sum([p[2]*p[4] for p in particles])
@@ -322,15 +347,20 @@ class ParticleFilter:
 
                     best_particle = (int(x_mean), int(y_mean), s_mean, a_mean)
 
-                    asd.append(particles)
-                  
-                    best_particles.append(best_particle)
 
+                    asd.append(particles)
+                    best_particles.append(best_particle)
                     boxa = Box((best_particle[0]-box_size, best_particle[1]-box_size), (best_particle[0]+box_size, best_particle[1]-box_size), (best_particle[0]+box_size, best_particle[1]+box_size), (best_particle[0]-box_size, best_particle[1]+box_size),best_particle[2],best_particle[3])
                     boxy = boxa.applyScaling(s_mean).applyRotation(a_mean)
-                
                     sdf.append(boxy.get_vertices())
-                    
+                
+                print("rotation time: ", np.sum(rot))
+                print("translation time: ", np.sum(trans))
+
+
+
+
+
                 return asd ,sdf, best_particles
     
 
@@ -341,17 +371,18 @@ class ParticleFilter:
 center_x, center_y = 640/2, 480/2
 box_size= 20
 pf = ParticleFilter("escrime-4-3.avi", Box((center_x-box_size, center_y-box_size), (center_x+box_size, center_y-box_size), (center_x+box_size, center_y+box_size), (center_x-box_size, center_y+box_size),1,0))
-particles,boxes,bp = pf.run_particle_filter()
+pf_time_start = timeit.default_timer()
+#particles,boxes,bp = pf.run_particle_filter()
+pf_time_end = timeit.default_timer()
 frames = list(pf.get_frames())
-frames_part = zip(frames, particles,boxes,bp)
+#frames_part = zip(frames, particles,boxes,bp)
 
-
+print("particle filter time: ", pf_time_end - pf_time_start)
 
 def main(save_gif=False):
     new_frames = []
-    for frame, pt, vertices, bp in frames_part:
-       
-      
+    for frame, pt, vertices, bp in []:#frames_part:
+
         for p in pt:
             cv2.circle(frame, (p[0], p[1]), 2, (0, 0, 255), -1)
         cv2.polylines(frame, np.int32([vertices]), True, (0, 255, 0), 2)
@@ -361,7 +392,7 @@ def main(save_gif=False):
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         new_frames.append(frame_rgb.copy())
         
-        if cv2.waitKey(40)==27:
+        if cv2.waitKey(24)==27:
             if cv2.waitKey(0)==27:
                 break
 
@@ -370,22 +401,6 @@ def main(save_gif=False):
         imageio.mimsave('output.gif', new_frames, fps=fps, loop=0)
 
 
-
-first_frame = frames[0]
-
-
-boxo = Box((center_x-box_size, center_y-box_size), (center_x+box_size, center_y-box_size), (center_x+box_size, center_y+box_size), (center_x-box_size, center_y+box_size),1,20)
-#plt.figure(figsize=(10,4))
-#boxo.rotate_box()
-#plt.imshow(boxo.getImagePortion(first_frame))
-#plt.show()
+#main(save_gif=True)
 
 
-particle = (center_x, center_y, 1, 30)
-
-rot_img = boxo.rotate_image(first_frame, particle)
-bound_rot_image = boxo.getImagePortion(rot_img)
-
-plt.figure(figsize=(10,4))
-plt.imshow(bound_rot_image)
-plt.show()
